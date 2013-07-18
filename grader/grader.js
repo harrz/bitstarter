@@ -24,8 +24,12 @@ References:
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var rest = require('restler');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var URL_DEFAULT = "agirungproiugrqe4691461987hjdgfhgjh";
+var checkJson;
+var outJson;
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
@@ -38,6 +42,10 @@ var assertFileExists = function(infile) {
 
 var cheerioHtmlFile = function(htmlfile) {
     return cheerio.load(fs.readFileSync(htmlfile));
+};
+
+var cheerioUrl = function(html) {
+    return cheerio.load(html);
 };
 
 var loadChecks = function(checksfile) {
@@ -55,6 +63,19 @@ var checkHtmlFile = function(htmlfile, checksfile) {
     return out;
 };
 
+var checkUrl = function(htmlBuffer, checksfile) {
+
+    $ = cheerioUrl(htmlBuffer);
+    var checks = loadChecks(checksfile).sort();
+    var out = {};
+    for(var ii in checks) {
+	var present = $(checks[ii]).length > 0;
+	out[checks[ii]] = present;
+    }
+    return out;
+};
+
+
 var clone = function(fn) {
     // Workaround for commander.js issue.
     // http://stackoverflow.com/a/6772648
@@ -65,10 +86,32 @@ if(require.main == module) {
     program
 	.option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
 	.option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+	.option('-u, --url <url>', 'URL of a website', URL_DEFAULT)
 	.parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+
+    //check if URL has been passed as an argument
+    if(program.url === URL_DEFAULT)
+    {
+	checkJson = checkHtmlFile(program.file, program.checks);
+	outJson = JSON.stringify(checkJson, null, 4);
+	console.log(outJson);
+
+    } else {
+
+	rest.get(program.url).on('complete', function(result) {
+	    if (result instanceof Error) {
+		sys.puts('Error -- Could not read your URL:\n\n' + result.message);
+		this.retry(5000); // try again after 5 sec
+	    } else {
+		checkJson = checkUrl(result, program.checks);
+		outJson = JSON.stringify(checkJson, null, 4);
+		console.log(outJson);
+	    }
+	});
+    }
+
 } else {
+console.log(7);
+
     exports.checkHtmlFile = checkHtmlFile;
 }
